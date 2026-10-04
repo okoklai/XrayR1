@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim AS unpack
+FROM debian:trixie-slim AS unpack
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
     && rm -rf /var/lib/apt/lists/*
 ARG TARGETARCH
@@ -14,7 +14,7 @@ RUN set -eu; \
     unzip "$asset" -d /out; \
     chmod 755 /out/XrayR
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/*
 LABEL org.opencontainers.image.source="https://github.com/okoklai/XrayR1"

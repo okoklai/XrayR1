@@ -65,7 +65,7 @@ sudo docker compose up -d --build
 sudo docker compose logs -f
 ```
 
-构建直接解压本仓库 `dist/` 中的安装包并校验 SHA256，不拉取上游 XrayR 镜像，也不下载上游源码。使用 Debian bookworm 基础镜像以满足 amd64 包的 glibc 依赖；基础镜像与 ca-certificates/tzdata 仍使用 Debian 官方资源。
+构建直接解压本仓库 `dist/` 中的安装包并校验 SHA256，不拉取上游 XrayR 镜像，也不下载上游源码。使用 Debian trixie 基础镜像以满足 amd64 包的 glibc 依赖；基础镜像与 ca-certificates/tzdata 仍使用 Debian 官方资源。
 
 更新：
 
