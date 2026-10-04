@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!dist/
+!dist/**
+!config/
+!config/**
+!LICENSE

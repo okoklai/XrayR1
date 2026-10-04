@@ -1,0 +1,23 @@
+name: Verify standalone distribution
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n install.sh && bash -n XrayR.sh
+      - run: python3 -m unittest discover -s tests -v
+      - name: Check Linux executable
+        run: |
+          unzip -q dist/$(cat VERSION)/XrayR-linux-64.zip -d /tmp/xrayr-check
+          chmod +x /tmp/xrayr-check/XrayR
+          /tmp/xrayr-check/XrayR version
+      - uses: docker/setup-buildx-action@v3
+      - run: docker compose config --quiet
+      - run: docker compose build
+      - run: docker run --rm --entrypoint XrayR xrayr1:local version

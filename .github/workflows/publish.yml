@@ -1,0 +1,50 @@
+name: Publish local backups and container
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  packages: write
+concurrency:
+  group: publish-distribution
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify saved assets
+        run: |
+          bash -n install.sh
+          bash -n XrayR.sh
+          python3 -m unittest discover -s tests -v
+          echo "XRAYR_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - name: Publish release from this repository only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$XRAYR_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$XRAYR_VERSION" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "XrayR $XRAYR_VERSION backup" \
+              --notes "Saved Linux binaries and corresponding upstream source. See backup/provenance.json for origin and checksums."
+          fi
+          gh release upload "$XRAYR_VERSION" --repo "$GITHUB_REPOSITORY" --clobber \
+            dist/"$XRAYR_VERSION"/*.zip dist/"$XRAYR_VERSION"/SHA256SUMS \
+            backup/XrayR-"$XRAYR_VERSION"-source.tar.gz backup/provenance.json LICENSE
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/s390x
+          push: true
+          build-args: XRAYR_VERSION=${{ env.XRAYR_VERSION }}
+          tags: |
+            ${{ env.IMAGE }}:${{ env.XRAYR_VERSION }}
+            ${{ env.IMAGE }}:latest

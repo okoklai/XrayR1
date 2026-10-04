@@ -1,8 +1,11 @@
-version: '3'
-services: 
-  xrayr: 
-    image: ghcr.io/xrayr-project/xrayr:latest
+services:
+  xrayr:
+    image: xrayr1:local
+    build:
+      context: .
+      args:
+        XRAYR_VERSION: v0.9.5
     volumes:
-      - ./config:/etc/XrayR/ # 映射配置文件夹
+      - ./config:/etc/XrayR/
     restart: always
     network_mode: host

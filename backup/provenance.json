@@ -1,0 +1,27 @@
+{
+  "version": "v0.9.5",
+  "upstream_repository": "a9086/XrayR",
+  "source_commit": "ea125e4a4fdb964487df91a6fec03476a57b20ce",
+  "source_archive": "backup/XrayR-v0.9.5-source.tar.gz",
+  "source_sha256": "0f444ec68cb6ed9b66cb0bc9cefb6ad144efe2f4ced0af00383cdbde1090eaac",
+  "assets": [
+    {
+      "name": "XrayR-linux-64.zip",
+      "sha256": "9c3a3ef9807bb00299fdb97a6d57f8043f30d1db5848b6d031e99210d2ae668e",
+      "bytes": 38044818,
+      "origin": "https://github.com/a9086/XrayR/releases/download/v0.9.5/XrayR-linux-64.zip"
+    },
+    {
+      "name": "XrayR-linux-arm64-v8a.zip",
+      "sha256": "c4e78a3a91203f061432f7e2509270b34d80b3957555e8c579a4e4c90f276b8b",
+      "bytes": 35181406,
+      "origin": "https://github.com/a9086/XrayR/releases/download/v0.9.5/XrayR-linux-arm64-v8a.zip"
+    },
+    {
+      "name": "XrayR-linux-s390x.zip",
+      "sha256": "eef11d94ee5beea7b1191a5352a411b416b2af89c76caae75d44d925a7cd2910",
+      "bytes": 37319480,
+      "origin": "https://github.com/a9086/XrayR/releases/download/v0.9.5/XrayR-linux-s390x.zip"
+    }
+  ]
+}

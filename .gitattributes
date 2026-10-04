@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+VERSION text eol=lf
+SHA256SUMS text eol=lf
+*.zip binary
+*.gz binary
+*.dat binary

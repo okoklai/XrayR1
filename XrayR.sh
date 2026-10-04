@@ -5,53 +5,14 @@ green='\033[0;32m'
 yellow='\033[0;33m'
 plain='\033[0m'
 
-version="v1.0.0"
+version="v1.1.0"
+RAW_BASE="https://raw.githubusercontent.com/okoklai/XrayR1/master"
 
 # check root
 [[ $EUID -ne 0 ]] && echo -e "${red}错误: ${plain} 必须使用root用户运行此脚本！\n" && exit 1
 
-# check os
-if [[ -f /etc/redhat-release ]]; then
-    release="centos"
-elif cat /etc/issue | grep -Eqi "debian"; then
-    release="debian"
-elif cat /etc/issue | grep -Eqi "ubuntu"; then
-    release="ubuntu"
-elif cat /etc/issue | grep -Eqi "centos|red hat|redhat"; then
-    release="centos"
-elif cat /proc/version | grep -Eqi "debian"; then
-    release="debian"
-elif cat /proc/version | grep -Eqi "ubuntu"; then
-    release="ubuntu"
-elif cat /proc/version | grep -Eqi "centos|red hat|redhat"; then
-    release="centos"
-else
-    echo -e "${red}未检测到系统版本，请联系脚本作者！${plain}\n" && exit 1
-fi
-
-os_version=""
-
-# os version
-if [[ -f /etc/os-release ]]; then
-    os_version=$(awk -F'[= ."]' '/VERSION_ID/{print $3}' /etc/os-release)
-fi
-if [[ -z "$os_version" && -f /etc/lsb-release ]]; then
-    os_version=$(awk -F'[= ."]+' '/DISTRIB_RELEASE/{print $2}' /etc/lsb-release)
-fi
-
-if [[ x"${release}" == x"centos" ]]; then
-    if [[ ${os_version} -le 6 ]]; then
-        echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
-    fi
-elif [[ x"${release}" == x"ubuntu" ]]; then
-    if [[ ${os_version} -lt 16 ]]; then
-        echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
-    fi
-elif [[ x"${release}" == x"debian" ]]; then
-    if [[ ${os_version} -lt 8 ]]; then
-        echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
-    fi
-fi
+[[ $(uname -s) == Linux ]] || { echo "仅支持 Linux。" >&2; exit 1; }
+command -v systemctl >/dev/null || { echo "需要 systemd；容器请使用 Docker Compose。" >&2; exit 1; }
 
 confirm() {
     if [[ $# > 1 ]]; then
@@ -83,15 +44,22 @@ before_show_menu() {
     show_menu
 }
 
-install() {
-    bash <(curl -Ls https://raw.githubusercontent.com/XrayR-project/XrayR-release/master/install.sh)
-    if [[ $? == 0 ]]; then
-        if [[ $# == 0 ]]; then
-            start
-        else
-            start 0
-        fi
+run_installer() {
+    local script result
+    script=$(mktemp) || return 1
+    if ! curl -fSL --retry 3 --connect-timeout 15 "$RAW_BASE/install.sh" -o "$script"; then
+        rm -f -- "$script"
+        echo "下载安装脚本失败，现有安装未改动。" >&2
+        return 1
     fi
+    [[ -s "$script" ]] && bash -n "$script" && bash "$script" "$@"
+    result=$?
+    rm -f -- "$script"
+    return "$result"
+}
+
+install() {
+    run_installer
 }
 
 update() {
@@ -100,15 +68,7 @@ update() {
     else
         version=$2
     fi
-#    confirm "本功能会强制重装当前最新版，数据不会丢失，是否继续?" "n"
-#    if [[ $? != 0 ]]; then
-#        echo -e "${red}已取消${plain}"
-#        if [[ $1 != 0 ]]; then
-#            before_show_menu
-#        fi
-#        return 0
-#    fi
-    bash <(curl -Ls https://raw.githubusercontent.com/XrayR-project/XrayR-release/master/install.sh) $version
+    run_installer "$version"
     if [[ $? == 0 ]]; then
         echo -e "${green}更新完成，已自动重启 XrayR，请使用 XrayR log 查看运行日志${plain}"
         exit
@@ -117,6 +77,7 @@ update() {
     if [[ $# == 0 ]]; then
         before_show_menu
     fi
+    return 1
 }
 
 config() {
@@ -257,27 +218,31 @@ show_log() {
 }
 
 install_bbr() {
-    bash <(curl -L -s https://raw.githubusercontent.com/chiakge/Linux-NetSpeed/master/tcp.sh)
-    #if [[ $? == 0 ]]; then
-    #    echo ""
-    #    echo -e "${green}安装 bbr 成功，请重启服务器${plain}"
-    #else
-    #    echo ""
-    #    echo -e "${red}下载 bbr 安装脚本失败，请检查本机能否连接 Github${plain}"
-    #fi
-
-    #before_show_menu
+    # Use the running kernel; never download or replace the kernel.
+    modprobe tcp_bbr 2>/dev/null || true
+    if ! sysctl -n net.ipv4.tcp_available_congestion_control | grep -qw bbr; then
+        echo "当前内核不支持 BBR，请通过发行版软件源升级内核后重试。" >&2
+        return 1
+    fi
+    mkdir -p /etc/sysctl.d
+    printf '%s\n' 'net.core.default_qdisc=fq' 'net.ipv4.tcp_congestion_control=bbr' \
+        > /etc/sysctl.d/99-xrayr-bbr.conf
+    sysctl -p /etc/sysctl.d/99-xrayr-bbr.conf
 }
 
 update_shell() {
-    wget -O /usr/bin/XrayR -N --no-check-certificate https://raw.githubusercontent.com/XrayR-project/XrayR-release/master/XrayR.sh
-    if [[ $? != 0 ]]; then
-        echo ""
-        echo -e "${red}下载脚本失败，请检查本机能否连接 Github${plain}"
-        before_show_menu
+    local script
+    script=$(mktemp) || return 1
+    if curl -fSL --retry 3 --connect-timeout 15 "$RAW_BASE/XrayR.sh" -o "$script" && [[ -s "$script" ]] && bash -n "$script"; then
+        command install -m 755 "$script" /usr/bin/XrayR
+        local result=$?
+        rm -f -- "$script"
+        [[ "$result" == 0 ]] || return "$result"
+        echo "升级脚本成功，请重新运行 XrayR。"
     else
-        chmod +x /usr/bin/XrayR
-        echo -e "${green}升级脚本成功，请重新运行脚本${plain}" && exit 0
+        rm -f -- "$script"
+        echo "下载脚本失败，已保留原脚本。" >&2
+        return 1
     fi
 }
 
@@ -387,7 +352,7 @@ show_usage() {
 show_menu() {
     echo -e "
   ${green}XrayR 后端管理脚本，${plain}${red}不适用于docker${plain}
---- https://github.com/XrayR-project/XrayR ---
+--- https://github.com/okoklai/XrayR1 ---
   ${green}0.${plain} 修改配置
 ————————————————
   ${green}1.${plain} 安装 XrayR
@@ -403,7 +368,7 @@ show_menu() {
   ${green}9.${plain} 设置 XrayR 开机自启
  ${green}10.${plain} 取消 XrayR 开机自启
 ————————————————
- ${green}11.${plain} 一键安装 bbr (最新内核)
+ ${green}11.${plain} 启用当前内核的 BBR
  ${green}12.${plain} 查看 XrayR 版本 
  ${green}13.${plain} 升级维护脚本
  "
@@ -440,7 +405,7 @@ show_menu() {
         ;;
         13) update_shell
         ;;
-        *) echo -e "${red}请输入正确的数字 [0-12]${plain}"
+        *) echo -e "${red}请输入正确的数字 [0-13]${plain}"
         ;;
     esac
 }
@@ -462,9 +427,9 @@ if [[ $# > 0 ]]; then
         ;;
         "log") check_install 0 && show_log 0
         ;;
-        "update") check_install 0 && update 0 $2
+        "update") check_install 0 && update 0 "${2:-}"
         ;;
-        "config") config $*
+        "config") config "$@"
         ;;
         "install") check_uninstall 0 && install 0
         ;;
